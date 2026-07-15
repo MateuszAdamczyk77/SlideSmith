@@ -1,136 +1,86 @@
-// Frontend API client. All calls go to the local Slidesmith server (proxied at
-// /api in dev, same-origin in production). The server holds the keys and talks
-// to Claude + post-bridge — the browser never sees the secrets in a request.
-import type {
-  AppConfig,
-  Project,
-  Slideshow,
-  SocialAccount,
-  ScheduledPost,
-  PostResult,
-  ModelOption,
-  LibraryImage,
-  LibraryPack,
-} from '../types';
+import type { Id } from '../../convex/_generated/dataModel';
+import type { PostResult, ScheduledPost, SocialAccount } from '../types';
 
-async function req<T>(path: string, init?: RequestInit): Promise<T> {
-  const res = await fetch(`/api${path}`, {
-    headers: { 'content-type': 'application/json' },
-    cache: 'no-store', // always hit the server — never a stale Schedule/Results list
-    ...init,
+// Convex queries/mutations/actions are invoked with the React hooks at the
+// component boundary. This module only contains transport-free normalization
+// and File Storage upload helpers; it never calls the retired Express API.
+
+export async function uploadPng(
+  blob: Blob,
+  generateUploadUrl: () => Promise<string>,
+): Promise<Id<'_storage'>> {
+  if (blob.type !== 'image/png') throw new Error('Only rendered PNG slides can be uploaded.');
+  const uploadUrl = await generateUploadUrl();
+  const response = await fetch(uploadUrl, {
+    method: 'POST',
+    headers: { 'Content-Type': 'image/png' },
+    body: blob,
   });
-  const body = await res.json().catch(() => ({}));
-  if (!res.ok) throw new Error((body as { error?: string }).error || res.statusText);
-  return body as T;
+  if (!response.ok) throw new Error(`Slide upload failed (${response.status}).`);
+  const body = await response.json() as { storageId?: Id<'_storage'> };
+  if (!body.storageId) throw new Error('Convex File Storage did not return a storage ID.');
+  return body.storageId;
 }
 
-export const getConfig = () => req<AppConfig>('/config');
-
-// Global settings only (keys + model).
-export const saveConfig = (patch: { keys?: AppConfig['keys']; model?: string }) =>
-  req<AppConfig>('/config', { method: 'PUT', body: JSON.stringify(patch) });
-
-// Projects — each has its own Brain + default post-bridge accounts.
-export const createProject = (name?: string) =>
-  req<AppConfig>('/projects', { method: 'POST', body: JSON.stringify({ name }) });
-
-export const updateProject = (
-  id: string,
-  patch: Partial<Pick<Project, 'name' | 'brain' | 'defaults' | 'imagePacks'>>
-) => req<AppConfig>(`/projects/${id}`, { method: 'PUT', body: JSON.stringify(patch) });
-
-export const deleteProject = (id: string) =>
-  req<AppConfig>(`/projects/${id}`, { method: 'DELETE' });
-
-export const activateProject = (id: string) =>
-  req<AppConfig>(`/projects/${id}/activate`, { method: 'POST' });
-
-export const testKeys = () =>
-  req<{ postbridge: boolean; openrouter: boolean; errors: Record<string, string> }>(
-    '/config/test',
-    { method: 'POST' }
-  );
-
-export const getModels = () => req<ModelOption[]>('/models');
-
-export const getQueue = () => req<Slideshow[]>('/queue');
-
-export const generate = (count = 4, packs?: string[]) =>
-  req<Slideshow[]>('/generate', { method: 'POST', body: JSON.stringify({ count, packs }) });
-
-export const removeFromQueue = (id: string) =>
-  req<Slideshow[]>(`/queue/${id}`, { method: 'DELETE' });
-
-export const updateSlideshow = (
-  id: string,
-  patch: Partial<Pick<Slideshow, 'slides' | 'caption' | 'hashtags' | 'hook'>>
-) => req<Slideshow[]>(`/queue/${id}`, { method: 'PUT', body: JSON.stringify(patch) });
-
-// ── Image library ─────────────────────────────────────────────────────────────
-export const getLibrary = () => req<LibraryImage[]>('/library');
-
-export const getPacks = () => req<LibraryPack[]>('/library/packs');
-
-export const getAccounts = () => req<SocialAccount[]>('/accounts');
-
-export interface SchedulePayload {
-  id: string;
-  caption: string;
-  slides: string[]; // PNG data URLs
-  socialAccounts: number[];
-  scheduledAt: string | null;
-  mode: 'draft' | 'schedule';
+export async function uploadFile(
+  blob: Blob,
+  generateUploadUrl: () => Promise<string>,
+): Promise<Id<'_storage'>> {
+  const uploadUrl = await generateUploadUrl();
+  const response = await fetch(uploadUrl, {
+    method: 'POST',
+    headers: { 'Content-Type': blob.type || 'application/octet-stream' },
+    body: blob,
+  });
+  if (!response.ok) throw new Error(`File upload failed (${response.status}).`);
+  const body = await response.json() as { storageId?: Id<'_storage'> };
+  if (!body.storageId) throw new Error('Convex File Storage did not return a storage ID.');
+  return body.storageId;
 }
 
-export const schedule = (payload: SchedulePayload) =>
-  req<unknown>('/schedule', { method: 'POST', body: JSON.stringify(payload) });
-
-// post-bridge → ScheduledPost. post-bridge stores caption + media + schedule;
-// it has no concept of our per-slide text, so the Schedule view shows the
-// rendered images + caption + status.
-export async function getScheduledPosts(): Promise<ScheduledPost[]> {
-  const raw = await req<Array<Record<string, unknown>>>('/posts');
-  return raw.map((p) => ({
-    id: String(p.id),
-    caption: String(p.caption || ''),
-    status: String(p.status || (p.is_draft ? 'draft' : 'scheduled')),
-    scheduledAt: (p.scheduled_at as string) || null,
-    // The server resolves post-bridge's nested media (media.object.url) into a
-    // flat string[] under `media_urls` — fall back to raw media for safety.
-    mediaUrls: Array.isArray(p.media_urls)
-      ? (p.media_urls as unknown[]).map(String).filter(Boolean)
-      : Array.isArray(p.media)
-      ? (p.media as Array<{ url?: string; object?: { url?: string } } | string>)
-          .map((m) => (typeof m === 'string' ? m : m.object?.url || m.url || ''))
-          .filter(Boolean)
-      : [],
-    socialAccounts: (p.social_accounts as number[]) || [],
-    isDraft: !!p.is_draft,
+export function mapScheduledPosts(raw: Array<Record<string, unknown>>): ScheduledPost[] {
+  return raw.map((post) => ({
+    id: String(post.id),
+    caption: String(post.caption || ''),
+    status: String(post.status || (post.is_draft ? 'draft' : 'scheduled')),
+    scheduledAt: (post.scheduled_at as string) || null,
+    mediaUrls: Array.isArray(post.media_urls)
+      ? post.media_urls.map(String).filter(Boolean)
+      : Array.isArray(post.media)
+        ? (post.media as Array<{ url?: string; object?: { url?: string } } | string>)
+            .map((media) => typeof media === 'string' ? media : media.object?.url || media.url || '')
+            .filter(Boolean)
+        : [],
+    socialAccounts: (post.social_accounts as number[]) || [],
+    isDraft: Boolean(post.is_draft),
   }));
 }
 
-function mapResult(a: Record<string, unknown>): PostResult {
-  return {
-    id: String(a.id),
-    platform: String(a.platform || ''),
-    views: Number(a.view_count || 0),
-    likes: Number(a.like_count || 0),
-    comments: Number(a.comment_count || 0),
-    shares: Number(a.share_count || 0),
-    coverImageUrl: (a.cover_image_url as string) || null,
-    shareUrl: (a.share_url as string) || null,
-    description: (a.video_description as string) || null,
-    lastSyncedAt: (a.last_synced_at as string) || null,
-  };
+export function mapAccounts(raw: unknown[]): SocialAccount[] {
+  return raw.flatMap((value) => {
+    if (!value || typeof value !== 'object' || Array.isArray(value)) return [];
+    const account = value as Record<string, unknown>;
+    const numericId = Number(account.id);
+    if (!Number.isFinite(numericId)) return [];
+    return [{
+      id: numericId,
+      platform: String(account.platform || account.provider || ''),
+      username: String(account.username || account.name || account.handle || ''),
+    }];
+  });
 }
 
-export async function getResults(): Promise<PostResult[]> {
-  const raw = await req<Array<Record<string, unknown>>>('/results');
-  return raw.map(mapResult);
-}
-
-// Trigger a post-bridge analytics sync, then return the refreshed results.
-export async function syncResults(): Promise<PostResult[]> {
-  const raw = await req<Array<Record<string, unknown>>>('/results/sync', { method: 'POST' });
-  return raw.map(mapResult);
+export function mapResults(raw: Array<Record<string, unknown>>): PostResult[] {
+  return raw.map((analytics) => ({
+    id: String(analytics.id),
+    platform: String(analytics.platform || ''),
+    views: Number(analytics.view_count || 0),
+    likes: Number(analytics.like_count || 0),
+    comments: Number(analytics.comment_count || 0),
+    shares: Number(analytics.share_count || 0),
+    coverImageUrl: (analytics.cover_image_url as string) || null,
+    shareUrl: (analytics.share_url as string) || null,
+    description: (analytics.video_description as string) || null,
+    lastSyncedAt: (analytics.last_synced_at as string) || null,
+  }));
 }

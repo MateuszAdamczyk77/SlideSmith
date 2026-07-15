@@ -4,17 +4,18 @@ import { ViewHeader } from '../components/ViewHeader';
 import { SlidePreview } from '../components/SlidePreview';
 import { Button } from '../components/Button';
 import { IconButton } from '../components/IconButton';
+import type { Id } from '../../convex/_generated/dataModel';
 
 interface QueueViewProps {
   slideshows: Slideshow[];
   generating: boolean;
   canGenerate: boolean;
-  selectedIds: string[];
+  selectedIds: Id<'slideshows'>[];
   onGenerate: () => void;
-  onApprove: (id: string) => void;
-  onReject: (id: string) => void;
-  onEdit: (id: string) => void;
-  onToggleSelect: (id: string) => void;
+  onApprove: (id: Id<'slideshows'>) => void;
+  onReject: (id: Id<'slideshows'>) => void;
+  onEdit: (id: Id<'slideshows'>) => void;
+  onToggleSelect: (id: Id<'slideshows'>) => void;
   onSelectAll: () => void;
   onClearSelection: () => void;
   onBulkSchedule: () => void;

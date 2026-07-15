@@ -1,7 +1,8 @@
 // Client-side slide renderer. Each slide becomes a 1080×1920 PNG drawn on a
 // canvas — text over a gradient. No image-generation API, no cost, deterministic
-// output. The resulting data URLs are sent to the server, which uploads them to
-// post-bridge as the post's media.
+// output. The resulting Blobs are uploaded directly to Convex File Storage. The
+// browser only passes storage IDs to the scheduling action; PNGs are never
+// serialized as Base64.
 //
 // Caption geometry (font %, stroke, line-height, padding, centering) comes from
 // lib/captionStyle.ts — the SAME constants the editor preview uses — so the
@@ -50,7 +51,16 @@ function drawCover(ctx: CanvasRenderingContext2D, img: HTMLImageElement) {
   ctx.drawImage(img, (W - w) / 2, (H - h) / 2, w, h);
 }
 
-export async function renderSlide(slide: Slide): Promise<string> {
+function canvasToPng(canvas: HTMLCanvasElement): Promise<Blob> {
+  return new Promise((resolve, reject) => {
+    canvas.toBlob(
+      (blob) => blob ? resolve(blob) : reject(new Error('Could not render slide PNG.')),
+      'image/png',
+    );
+  });
+}
+
+export async function renderSlide(slide: Slide): Promise<Blob> {
   // Make sure the web font is ready, otherwise the first render uses a fallback.
   if (document.fonts?.ready) await document.fonts.ready;
 
@@ -114,11 +124,11 @@ export async function renderSlide(slide: Slide): Promise<string> {
     ctx.fillText(lines[i], x, y);
   }
 
-  return canvas.toDataURL('image/png');
+  return canvasToPng(canvas);
 }
 
-export async function renderSlideshow(show: Slideshow): Promise<string[]> {
-  const out: string[] = [];
+export async function renderSlideshow(show: Slideshow): Promise<Blob[]> {
+  const out: Blob[] = [];
   for (const slide of show.slides) {
     out.push(await renderSlide(slide));
   }

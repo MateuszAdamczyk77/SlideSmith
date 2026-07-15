@@ -1,7 +1,10 @@
 import { useEffect, useState } from 'react';
 import { X, Loader2, CalendarClock, Info, CheckCircle2, ExternalLink } from 'lucide-react';
+import { useAction } from 'convex/react';
+import { api } from '../../convex/_generated/api';
+import type { Id } from '../../convex/_generated/dataModel';
 import type { Slideshow, SocialAccount } from '../types';
-import { getScheduledPosts } from '../lib/api';
+import { mapScheduledPosts } from '../lib/api';
 import { Button } from './Button';
 import { SlidePreview } from './SlidePreview';
 
@@ -22,6 +25,7 @@ interface ScheduleModalProps {
   slideshow: Slideshow;
   accounts: SocialAccount[];
   defaults: { socialAccountIds: number[]; mode: 'draft' | 'schedule' };
+  projectId: Id<'projects'>;
   onClose: () => void;
   onConfirm: (opts: {
     socialAccounts: number[];
@@ -30,7 +34,8 @@ interface ScheduleModalProps {
   }) => Promise<void>;
 }
 
-export function ScheduleModal({ slideshow, accounts, defaults, onClose, onConfirm }: ScheduleModalProps) {
+export function ScheduleModal({ slideshow, accounts, defaults, projectId, onClose, onConfirm }: ScheduleModalProps) {
+  const listPosts = useAction(api.postbridge.listPosts);
   const [selected, setSelected] = useState<number[]>(defaults.socialAccountIds);
   const [mode, setMode] = useState<'draft' | 'schedule'>(defaults.mode);
   // Seed with now + gap immediately so the field is never blank; refine to
@@ -44,8 +49,9 @@ export function ScheduleModal({ slideshow, accounts, defaults, onClose, onConfir
   const [doneMode, setDoneMode] = useState<'draft' | 'schedule' | null>(null);
 
   useEffect(() => {
-    getScheduledPosts()
-      .then((posts) => {
+    listPosts({ projectId })
+      .then((raw) => {
+        const posts = mapScheduledPosts(raw as Array<Record<string, unknown>>);
         const future = posts
           .map((p) => (p.scheduledAt ? new Date(p.scheduledAt).getTime() : 0))
           .filter((t) => t > Date.now());
@@ -53,7 +59,7 @@ export function ScheduleModal({ slideshow, accounts, defaults, onClose, onConfir
         setWhen(toLocalInput(new Date(base + DEFAULT_GAP_HOURS * 3600_000)));
       })
       .catch(() => {});
-  }, []);
+  }, [listPosts, projectId]);
 
   const toggle = (id: number) =>
     setSelected((p) => (p.includes(id) ? p.filter((x) => x !== id) : [...p, id]));

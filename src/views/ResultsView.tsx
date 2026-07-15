@@ -1,11 +1,15 @@
 import { useCallback, useEffect, useState } from 'react';
 import { Eye, Heart, MessageCircle, Share2, Loader2, RefreshCw } from 'lucide-react';
+import { useAction } from 'convex/react';
+import { api } from '../../convex/_generated/api';
+import type { Id } from '../../convex/_generated/dataModel';
 import type { PostResult } from '../types';
 import { ViewHeader } from '../components/ViewHeader';
-import { getResults, syncResults } from '../lib/api';
+import { mapResults } from '../lib/api';
 
 interface ResultsViewProps {
   configured: boolean;
+  projectId: Id<'projects'>;
 }
 
 function formatNumber(n: number) {
@@ -14,17 +18,19 @@ function formatNumber(n: number) {
   return n.toString();
 }
 
-export function ResultsView({ configured }: ResultsViewProps) {
+export function ResultsView({ configured, projectId }: ResultsViewProps) {
+  const listAnalytics = useAction(api.postbridge.listAnalytics);
+  const syncAnalytics = useAction(api.postbridge.syncAnalytics);
   const [results, setResults] = useState<PostResult[] | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [refreshing, setRefreshing] = useState(false);
 
   useEffect(() => {
     if (!configured) return;
-    getResults()
-      .then(setResults)
+    listAnalytics({ projectId })
+      .then((raw) => setResults(mapResults(raw as Array<Record<string, unknown>>)))
       .catch((e) => setError(e instanceof Error ? e.message : String(e)));
-  }, [configured]);
+  }, [configured, listAnalytics, projectId]);
 
   // Refresh pulls fresh metrics from the platforms (post-bridge sync) first,
   // which is also what backfills cover thumbnails once a post goes live.
@@ -33,13 +39,14 @@ export function ResultsView({ configured }: ResultsViewProps) {
     setRefreshing(true);
     setError(null);
     try {
-      setResults(await syncResults());
+      const raw = await syncAnalytics({ projectId });
+      setResults(mapResults(raw as Array<Record<string, unknown>>));
     } catch (e) {
       setError(e instanceof Error ? e.message : String(e));
     } finally {
       setRefreshing(false);
     }
-  }, [configured]);
+  }, [configured, projectId, syncAnalytics]);
 
   const totalViews = results?.reduce((s, r) => s + r.views, 0) ?? 0;
   const totalLikes = results?.reduce((s, r) => s + r.likes, 0) ?? 0;

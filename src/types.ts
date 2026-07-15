@@ -1,7 +1,10 @@
+import type { Id } from '../convex/_generated/dataModel';
+
 export type ViewKey = 'queue' | 'library' | 'schedule' | 'results' | 'brain' | 'settings';
 
 export interface Slide {
   id: string;
+  imageId?: Id<'images'>;
   text: string;
   // Generated slides have no source image — they're rendered from text over a
   // gradient. `imageUrl` is kept optional for backwards-compat / future use.
@@ -11,7 +14,7 @@ export interface Slide {
 }
 
 export interface Slideshow {
-  id: string;
+  id: Id<'slideshows'>;
   hook: string;
   caption: string;
   hashtags: string[];
@@ -34,7 +37,7 @@ export interface ProjectDefaults {
 }
 
 export interface Project {
-  id: string;
+  id: Id<'projects'>;
   name: string;
   brain: BrainState;
   defaults: ProjectDefaults;
@@ -42,22 +45,24 @@ export interface Project {
 }
 
 export interface AppConfig {
-  keys: { postbridge: string; openrouter: string };
+  keys: { postbridge: boolean; openrouter: boolean };
   model: string;
   projects: Project[];
-  activeProjectId: string;
+  activeProjectId: Id<'projects'> | null;
 }
 
 export interface LibraryImage {
-  id: string;
-  url: string;
+  id: Id<'images'>;
+  url: string | null;
   pack: string;
-  source: 'bundled';
+  packId?: Id<'imagePacks'>;
+  source: 'uploaded' | 'bundled';
 }
 
 export interface LibraryPack {
+  id: Id<'imagePacks'>;
   name: string;
-  source: 'bundled';
+  source: string;
   count: number;
   covers: string[];
 }

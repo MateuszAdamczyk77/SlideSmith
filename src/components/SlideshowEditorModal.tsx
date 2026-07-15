@@ -1,9 +1,10 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useMemo, useState } from 'react';
 import { X, Loader2, ChevronLeft, ChevronRight, Trash2, Shuffle, Image as ImageIcon } from 'lucide-react';
-import type { Slideshow, Slide, LibraryImage } from '../types';
+import { useQuery } from 'convex/react';
+import { api } from '../../convex/_generated/api';
+import type { Slideshow, Slide } from '../types';
 import { Button } from './Button';
 import { SlidePreview } from './SlidePreview';
-import { getLibrary } from '../lib/api';
 
 interface SlideshowEditorModalProps {
   slideshow: Slideshow;
@@ -19,20 +20,19 @@ export function SlideshowEditorModal({ slideshow, onClose, onSave }: SlideshowEd
   const [hashtags, setHashtags] = useState(slideshow.hashtags.join(' '));
   const [index, setIndex] = useState(0);
   const [tab, setTab] = useState<Tab>('post');
-  const [library, setLibrary] = useState<LibraryImage[] | null>(null);
+  const library = useQuery(api.images.list, {});
   const [pack, setPack] = useState('all');
   const [saving, setSaving] = useState(false);
 
-  useEffect(() => {
-    getLibrary().then(setLibrary).catch(() => setLibrary([]));
-  }, []);
-
   const packs = useMemo(
-    () => ['all', ...Array.from(new Set((library || []).map((i) => i.pack)))],
+    () => ['all', ...Array.from(new Set((library ?? []).map((i) => i.pack)))],
     [library]
   );
   const filtered = useMemo(
-    () => (library || []).filter((i) => pack === 'all' || i.pack === pack),
+    () => (library ?? []).filter(
+      (image): image is typeof image & { url: string } =>
+        image.url !== null && (pack === 'all' || image.pack === pack),
+    ),
     [library, pack]
   );
 
@@ -194,7 +194,7 @@ export function SlideshowEditorModal({ slideshow, onClose, onSave }: SlideshowEd
                       Shuffle all
                     </Button>
                   </div>
-                  {library === null ? (
+                  {library === undefined ? (
                     <div className="flex items-center justify-center py-6 text-ink-5 text-[12px] gap-2">
                       <Loader2 size={13} className="animate-spin" /> Loading…
                     </div>
@@ -203,7 +203,7 @@ export function SlideshowEditorModal({ slideshow, onClose, onSave }: SlideshowEd
                       {filtered.map((img) => (
                         <button
                           key={img.id}
-                          onClick={() => patchSlide({ imageUrl: img.url })}
+                          onClick={() => patchSlide({ imageId: img.id, imageUrl: img.url })}
                           className={`aspect-[9/16] rounded-md overflow-hidden bg-raised transition-all ${
                             current.imageUrl === img.url ? 'ring-2 ring-ink' : 'hover:ring-2 hover:ring-line-2'
                           }`}

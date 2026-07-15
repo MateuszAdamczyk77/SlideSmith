@@ -1,7 +1,6 @@
-import { useEffect, useState } from 'react';
 import { Check } from 'lucide-react';
-import type { LibraryPack } from '../types';
-import { getPacks } from '../lib/api';
+import { useQuery } from 'convex/react';
+import { api } from '../../convex/_generated/api';
 
 interface PackPickerProps {
   selected: string[];
@@ -10,18 +9,14 @@ interface PackPickerProps {
 }
 
 // Aesthetic-pack picker with cover thumbnails. Used in the Generate modal and
-// Settings. Packs come from /api/library/packs.
+// Settings. Packs are a reactive Convex query.
 export function PackPicker({ selected, onChange, disabled }: PackPickerProps) {
-  const [packs, setPacks] = useState<LibraryPack[] | null>(null);
-
-  useEffect(() => {
-    getPacks().then(setPacks).catch(() => setPacks([]));
-  }, []);
+  const packs = useQuery(api.imagePacks.list, {});
 
   const toggle = (name: string) =>
     onChange(selected.includes(name) ? selected.filter((x) => x !== name) : [...selected, name]);
 
-  const allNames = (packs || []).map((p) => p.name);
+  const allNames = (packs ?? []).map((p) => p.name);
 
   return (
     <div>
@@ -35,7 +30,7 @@ export function PackPicker({ selected, onChange, disabled }: PackPickerProps) {
         </div>
       </div>
 
-      {packs === null ? (
+      {packs === undefined ? (
         <div className="text-[12px] text-ink-5 py-6 text-center">Loading packs…</div>
       ) : (
         <div className="grid grid-cols-3 gap-2">

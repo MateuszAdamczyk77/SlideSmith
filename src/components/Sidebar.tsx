@@ -1,5 +1,6 @@
 import { useState } from 'react';
-import { LayoutGrid, CalendarClock, LineChart, Brain, Settings, ChevronsUpDown, Plus, Check, Images } from 'lucide-react';
+import { LayoutGrid, CalendarClock, LineChart, Brain, Settings, ChevronsUpDown, Plus, Check, Images, LogOut } from 'lucide-react';
+import type { Id } from '../../convex/_generated/dataModel';
 import type { ViewKey, Project } from '../types';
 
 interface SidebarProps {
@@ -8,9 +9,10 @@ interface SidebarProps {
   queueCount: number;
   scheduledCount: number;
   projects: Project[];
-  activeProjectId: string;
-  onSwitchProject: (id: string) => void;
+  activeProjectId: Id<'projects'>;
+  onSwitchProject: (id: Id<'projects'>) => void;
   onNewProject: () => void;
+  onSignOut: () => void;
 }
 
 const nav: { key: ViewKey; label: string; icon: typeof LayoutGrid; badge?: 'queue' | 'scheduled' }[] = [
@@ -34,6 +36,7 @@ export function Sidebar({
   activeProjectId,
   onSwitchProject,
   onNewProject,
+  onSignOut,
 }: SidebarProps) {
   const [menuOpen, setMenuOpen] = useState(false);
   const active = projects.find((p) => p.id === activeProjectId) ?? projects[0];
@@ -139,6 +142,13 @@ export function Sidebar({
         >
           <Settings size={14} className="shrink-0" />
           <span className="text-[13px]">Settings</span>
+        </button>
+        <button
+          onClick={onSignOut}
+          className="w-full h-9 flex items-center gap-2.5 rounded-lg px-2 text-ink-6 hover:text-ink-4 hover:bg-raised"
+        >
+          <LogOut size={14} className="shrink-0" />
+          <span className="text-[13px]">Sign out</span>
         </button>
       </div>
     </aside>

@@ -1,9 +1,11 @@
 import { useEffect, useMemo, useState } from 'react';
 import { X, Loader2, CalendarClock, CheckCircle2, ExternalLink } from 'lucide-react';
 import type { Slideshow, SocialAccount, ProjectDefaults } from '../types';
+import { useAction } from 'convex/react';
+import { api } from '../../convex/_generated/api';
+import type { Id } from '../../convex/_generated/dataModel';
 import { Button } from './Button';
-import { renderSlideshow } from '../lib/render';
-import { schedule as scheduleOne, getScheduledPosts } from '../lib/api';
+import { mapScheduledPosts } from '../lib/api';
 
 // post-bridge dashboard — where the user reviews what we just sent over.
 const PB_SCHEDULED_URL = 'https://www.post-bridge.com/dashboard/posts/scheduled';
@@ -13,6 +15,8 @@ interface BulkScheduleModalProps {
   slideshows: Slideshow[];
   accounts: SocialAccount[];
   defaults: ProjectDefaults;
+  projectId: Id<'projects'>;
+  onSchedule: (show: Slideshow, opts: { socialAccounts: number[]; mode: 'draft' | 'schedule'; scheduledAt: string | null }) => Promise<void>;
   onClose: () => void;
   onDone: () => void;
 }
@@ -24,7 +28,8 @@ function toLocalInput(d: Date): string {
   return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}T${pad(d.getHours())}:${pad(d.getMinutes())}`;
 }
 
-export function BulkScheduleModal({ slideshows, accounts, defaults, onClose, onDone }: BulkScheduleModalProps) {
+export function BulkScheduleModal({ slideshows, accounts, defaults, projectId, onSchedule, onClose, onDone }: BulkScheduleModalProps) {
+  const listPosts = useAction(api.postbridge.listPosts);
   const [selectedAccounts, setSelectedAccounts] = useState<number[]>(defaults.socialAccountIds);
   const [mode, setMode] = useState<'schedule' | 'draft'>(defaults.mode === 'draft' ? 'draft' : 'schedule');
   const [hours, setHours] = useState(6);
@@ -36,8 +41,9 @@ export function BulkScheduleModal({ slideshows, accounts, defaults, onClose, onD
 
   // Default the start time to AFTER the last thing already scheduled in post-bridge.
   useEffect(() => {
-    getScheduledPosts()
-      .then((posts) => {
+    listPosts({ projectId })
+      .then((raw) => {
+        const posts = mapScheduledPosts(raw as Array<Record<string, unknown>>);
         const future = posts
           .map((p) => (p.scheduledAt ? new Date(p.scheduledAt).getTime() : 0))
           .filter((t) => t > Date.now());
@@ -47,7 +53,7 @@ export function BulkScheduleModal({ slideshows, accounts, defaults, onClose, onD
         setStartLocal(toLocalInput(new Date(base + 6 * 3600_000)));
       })
       .catch(() => {});
-  }, []);
+  }, [listPosts, projectId]);
 
   const resetStartAfterLast = (h: number) => {
     const base = lastScheduledMs ?? Date.now();
@@ -92,12 +98,7 @@ export function BulkScheduleModal({ slideshows, accounts, defaults, onClose, onD
         const i = next++;
         const show = slideshows[i];
         try {
-          const slides = await renderSlideshow(show);
-          const caption = `${show.caption}${show.hashtags.length ? ' ' + show.hashtags.map((t) => `#${t}`).join(' ') : ''}`;
-          await scheduleOne({
-            id: show.id,
-            caption,
-            slides,
+          await onSchedule(show, {
             socialAccounts: selectedAccounts,
             scheduledAt: mode === 'schedule' ? new Date(startMs + i * stepMs).toISOString() : null,
             mode,

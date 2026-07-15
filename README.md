@@ -1,95 +1,76 @@
 # Slidesmith
 
-Generate on-brand TikTok/Instagram **carousel slideshows** with Claude, then schedule and post them to your connected accounts — all from a clean local dashboard you run yourself.
+Slidesmith creates on-brand TikTok/Instagram carousel slideshows, renders them in the browser, and publishes them through post-bridge. The frontend remains React + Vite; all backend state, authentication, files, and integrations run in Convex.
 
-Slidesmith is **bring-your-own-keys** and **local-first**. There's no SaaS, no sign-up, and no database to set up. It runs on your machine, stores its config in a single file in your home directory, and uses [post-bridge](https://post-bridge.com?atp=clip-factory) to handle the hard parts (media hosting, multi-platform scheduling/posting, and analytics).
+## Architecture
 
----
+- **Convex Auth** — password sign-in restricted by `ALLOWED_USER_EMAIL`.
+- **Convex Database** — owner-scoped projects, image packs, images, slideshows, slides, and settings.
+- **Convex File Storage** — library images and temporary rendered PNG files.
+- **Convex Actions** — OpenRouter generation and post-bridge scheduling/analytics. API keys never reach the browser or database.
+- **React + Vite** — existing dashboard, editor, browser-side 1080×1920 rendering, queue, schedule, and results views.
 
-## How it works
+Rendered slides are uploaded as binary PNG Blobs. The client passes only Convex `storageId` values to the post-bridge Action; temporary files are deleted after success or failure.
 
-```
-You ──▶ Brain (niche, audience, style)
-          │
-          ▼
-   Claude generates slideshows ──▶ Queue (review / approve)
-                                      │
-                                      ▼
-                       Slides rendered to images in the browser
-                                      │
-                                      ▼
-                    post-bridge ──▶ schedules + posts to TikTok / IG / …
-                                      │
-                                      ▼
-                              Results (live analytics)
-```
-
-- **Generation** is done by an AI model via **OpenRouter** (your OpenRouter key) — pick any model from the dropdown.
-- **Slide images** are rendered locally in your browser (text over a gradient *or* a background image from the Library) — no image-gen API, no cost.
-- **Backgrounds** come from a bundled **image library** of curated aesthetic packs.
-- **Scheduling, posting, and analytics** are handled by **post-bridge** (your post-bridge key). That also means **no posting integrations to build and no storage to host.**
-
-## What you need
-
-Two API keys, entered in the in-app **Settings** screen:
-
-| Key | What it's for | Where to get it |
-| --- | --- | --- |
-| **OpenRouter** | Runs the AI that writes the slideshows (any model) | [openrouter.ai/keys](https://openrouter.ai/keys) |
-| **post-bridge** | Scheduling, posting & analytics | [post-bridge.com](https://post-bridge.com?atp=clip-factory) |
-
-Connect your social accounts inside post-bridge — they'll show up in Slidesmith automatically.
-
-## Quick start
+## Local setup
 
 ```bash
-git clone <this-repo>
-cd slidesmith
 npm install
+CONVEX_AGENT_MODE=anonymous npx convex dev --once
+npx @convex-dev/auth --skip-git-check --web-server-url http://localhost:5173
+```
+
+Configure the deployment. Use the email that should be the only account allowed to sign up and sign in:
+
+```bash
+npx convex env set ALLOWED_USER_EMAIL owner@example.com
+npx convex env set OPENROUTER_API_KEY your_openrouter_key
+npx convex env set POST_BRIDGE_API_KEY your_post_bridge_key
+```
+
+Then start Convex and Vite together:
+
+```bash
 npm run dev
 ```
 
-Then open the printed Vite URL (default http://localhost:5173). On first run you'll land on **Settings** — paste your two keys, hit **Test connection**, and you're set.
+Open the printed Vite URL. On first use choose **Create account** and use exactly the email configured in `ALLOWED_USER_EMAIL`; subsequent visits use **Sign in**.
 
-`npm run dev` starts two things together:
-- the **web UI** (Vite, port 5173)
-- the **local server** (Node/Express, port 8787) that holds your keys and talks to Claude + post-bridge
+## Bundled image migration
 
-### Production / single-process
+The old static background collection is retained only as a one-time source. In **Settings → Background packs**, click **Import bundled library to Convex Storage**. The authenticated browser uploads the JPG files to Convex Storage and creates `imagePacks`/`images` records. Re-running the import is safe: duplicate records are detected and duplicate uploaded files are deleted.
+
+New image uploads follow the same Storage pattern: request an authenticated upload URL, upload the binary file, then register its `storageId` in the owner-scoped `images` table.
+
+## Legacy JSON migration
+
+The Express backend and `~/.slidesmith/config.json` / `queue.json` persistence are retired. `convex/migrations.ts` exposes the authenticated, idempotent `migrations.importLegacyData` mutation for project and queue data. It intentionally rejects API keys; secrets must be set as Convex environment variables.
+
+The legacy input is bounded to 100 projects, 200 slideshows, and 100 slides per slideshow. Legacy IDs are retained for idempotency. The existing local project files are not read automatically by the app.
+
+## Production
+
+Link the repo to a Convex project, configure the same environment variables on the production deployment, initialize production Auth keys, deploy Convex, and build the frontend:
 
 ```bash
-npm run build   # build the UI
-npm start       # serves the UI + API from one Node process (port 8787)
+npx @convex-dev/auth --prod --skip-git-check --web-server-url https://your-app.example
+npx convex deploy
+npm run build
 ```
 
-## Using it
+Deploy `dist/` to any static host and provide its production `VITE_CONVEX_URL` during the build.
 
-1. **Projects** — each project is one brand/account, with its own Brain and default posting accounts. Switch/create them from the top-left. (Your keys and chosen model are shared across all projects.)
-2. **Brain** — tell the AI who this project is: niche, app/brand, audience, and style memory. This shapes every generation.
-3. **Background packs** (Settings) — pick which image packs this project draws from. *Generate* then auto-applies a background to every slide. Select none for plain gradients.
-4. **Queue** — hit *Generate* and the AI writes a batch of slideshows, already wearing backgrounds. Hit **Edit** on any card to preview the carousel and tweak the caption, hashtags, per-slide text, and per-slide background.
-5. **Library** — browse the bundled aesthetic packs.
-6. **Approve** — pick which connected accounts to post to and either schedule a time or save as a draft in post-bridge. Slidesmith renders each slide to an image and hands it to post-bridge.
-7. **Schedule / Results** — track what's queued and how published posts are performing, straight from post-bridge.
+## Validation
 
-### A note on the bundled images
+```bash
+npm test
+npm run lint
+npm run build
+CONVEX_AGENT_MODE=anonymous npx convex dev --once
+```
 
-Slidesmith ships with ~140 curated background images organized into aesthetic packs (`public/library/`). They were collected from the web to get you started and may be subject to third-party copyright — they are not licensed stock.
-
-## Where your data lives
-
-- **API keys + Brain + settings:** `~/.slidesmith/config.json`
-- **Generated-but-not-yet-scheduled drafts:** `~/.slidesmith/queue.json`
-- **Everything else** (media, scheduled posts, results) lives in your post-bridge account.
-
-Your keys never leave your machine except to reach the services they belong to (OpenRouter, post-bridge). The browser never sees them — they stay on the local server.
-
-You can override the storage location with `SLIDESMITH_DIR` and the server port with `PORT` (see `.env.example`).
-
-## Tech
-
-React 19 + Vite + Tailwind (UI), a small Express server (keys + OpenRouter + post-bridge proxy), the OpenRouter API, and the post-bridge API. No database.
+Tests cover authentication, the allowlist, owner-scoped project access, and rejection of a second identity token.
 
 ## License
 
-[PolyForm Noncommercial 1.0.0](./LICENSE) — free to use, modify, self-host, and share for any **noncommercial** purpose. Commercial use (including reselling, hosting it as a paid service, or bundling it into a product you charge for) is not permitted without separate permission from the author.
+[PolyForm Noncommercial 1.0.0](./LICENSE)

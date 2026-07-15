@@ -1,10 +1,13 @@
 import { useEffect, useState } from 'react';
-import { Check, X, Loader2, KeyRound, Trash2, Info } from 'lucide-react';
+import { Check, X, Loader2, KeyRound, Trash2, Info, Images } from 'lucide-react';
+import { useAction, useMutation } from 'convex/react';
+import { api } from '../../convex/_generated/api';
 import type { AppConfig, Project, SocialAccount, ModelOption } from '../types';
 import { ViewHeader } from '../components/ViewHeader';
 import { Button } from '../components/Button';
-import { testKeys, getModels } from '../lib/api';
 import { PackPicker } from '../components/PackPicker';
+import { uploadFile } from '../lib/api';
+import { bundledImagePaths, bundledPacks } from '../lib/bundledLibrary';
 
 interface SettingsViewProps {
   config: AppConfig;
@@ -12,7 +15,6 @@ interface SettingsViewProps {
   accounts: SocialAccount[];
   canDelete: boolean;
   onSave: (patch: {
-    keys?: AppConfig['keys'];
     model?: string;
     name?: string;
     defaults?: Project['defaults'];
@@ -44,8 +46,12 @@ export function SettingsView({
   onDeleteProject,
   onReloadAccounts,
 }: SettingsViewProps) {
-  const [postbridge, setPostbridge] = useState(config.keys.postbridge);
-  const [openrouter, setOpenrouter] = useState(config.keys.openrouter);
+  const listModels = useAction(api.openrouter.listModels);
+  const testOpenrouter = useAction(api.openrouter.test);
+  const testPostbridge = useAction(api.postbridge.test);
+  const createImagePack = useMutation(api.imagePacks.create);
+  const generateUploadUrl = useMutation(api.images.generateUploadUrl);
+  const registerImage = useMutation(api.images.register);
   const [model, setModel] = useState(config.model);
   const [name, setName] = useState(project.name);
   const [mode, setMode] = useState(project.defaults.mode);
@@ -58,18 +64,11 @@ export function SettingsView({
   const [saved, setSaved] = useState(false);
   const [saveError, setSaveError] = useState<string | null>(null);
   const [test, setTest] = useState<{ postbridge: boolean; openrouter: boolean; errors: Record<string, string> } | null>(null);
-
-  // Re-sync editable fields when the active project changes (switching projects).
-  useEffect(() => {
-    setName(project.name);
-    setMode(project.defaults.mode);
-    setSelected(project.defaults.socialAccountIds);
-    setImagePacks(project.imagePacks);
-  }, [project.id, project.name, project.defaults.mode, project.defaults.socialAccountIds, project.imagePacks]);
+  const [libraryImport, setLibraryImport] = useState<{ done: number; total: number } | null>(null);
 
   useEffect(() => {
-    getModels().then(setModels).catch(() => setModels([]));
-  }, []);
+    listModels({ projectId: project.id }).then(setModels).catch(() => setModels([]));
+  }, [listModels, project.id]);
 
   const save = async () => {
     setSaving(true);
@@ -77,7 +76,6 @@ export function SettingsView({
     setSaveError(null);
     try {
       await onSave({
-        keys: { postbridge, openrouter },
         model,
         name,
         defaults: { socialAccountIds: selected, mode },
@@ -97,7 +95,18 @@ export function SettingsView({
     setTest(null);
     try {
       await save();
-      setTest(await testKeys());
+      const errors: Record<string, string> = {};
+      const [openrouterResult, postbridgeResult] = await Promise.all([
+        testOpenrouter({ projectId: project.id }).then(() => true).catch((error) => {
+          errors.openrouter = error instanceof Error ? error.message : String(error);
+          return false;
+        }),
+        testPostbridge({ projectId: project.id }).then(() => true).catch((error) => {
+          errors.postbridge = error instanceof Error ? error.message : String(error);
+          return false;
+        }),
+      ]);
+      setTest({ openrouter: openrouterResult, postbridge: postbridgeResult, errors });
       onReloadAccounts();
     } finally {
       setTesting(false);
@@ -106,6 +115,43 @@ export function SettingsView({
 
   const toggleAccount = (id: number) =>
     setSelected((prev) => (prev.includes(id) ? prev.filter((x) => x !== id) : [...prev, id]));
+
+  const importBundledLibrary = async () => {
+    const total = bundledPacks.reduce((count, pack) => count + bundledImagePaths(pack).length, 0);
+    setLibraryImport({ done: 0, total });
+    setSaveError(null);
+    let done = 0;
+    try {
+      for (const pack of bundledPacks) {
+        const imagePackId = await createImagePack({
+          name: pack.name,
+          slug: pack.slug,
+          description: pack.description,
+          source: 'bundled',
+        });
+        for (const path of bundledImagePaths(pack)) {
+          const response = await fetch(`/library/${path}`);
+          if (!response.ok) throw new Error(`Could not load bundled image ${path}.`);
+          const blob = await response.blob();
+          const storageId = await uploadFile(blob, () => generateUploadUrl({}));
+          await registerImage({
+            storageId,
+            imagePackId,
+            kind: 'library',
+            mimeType: blob.type || 'image/jpeg',
+            originalName: path,
+          });
+          setLibraryImport({ done: ++done, total });
+        }
+      }
+      setImagePacks(bundledPacks.map((pack) => pack.name));
+      setSaved(true);
+    } catch (cause) {
+      setSaveError(cause instanceof Error ? cause.message : String(cause));
+    } finally {
+      setLibraryImport(null);
+    }
+  };
 
   const filtered = modelFilter
     ? models.filter(
@@ -119,7 +165,7 @@ export function SettingsView({
     <>
       <ViewHeader
         title="Settings"
-        subtitle="Your own API keys, stored locally on this machine — never sent anywhere but the services they belong to."
+        subtitle="Project defaults and secure integration status. Secrets stay in Convex environment variables."
       />
 
       <div className="flex-1 overflow-y-auto">
@@ -139,32 +185,13 @@ export function SettingsView({
             )}
           </Section>
 
-          {/* Keys (global) */}
+          {/* Integration secrets are deployment environment variables, never browser state. */}
           <Section
-            title="API keys"
-            description="Shared across all projects. Stored in ~/.slidesmith/config.json on your computer."
+            title="Integrations"
+            description="API keys are configured by the deployment owner as OPENROUTER_API_KEY and POST_BRIDGE_API_KEY. They are never returned to this browser or stored in project documents."
           >
-            <Field
-              label="post-bridge API key"
-              hint={<>Handles scheduling, posting &amp; analytics. Get one at <PostBridgeLink>post-bridge.com</PostBridgeLink>.</>}
-            >
-              <input
-                value={postbridge}
-                onChange={(e) => setPostbridge(e.target.value)}
-                placeholder="pb_..."
-                className={`${inputClass} font-mono`}
-              />
-              <TestBadge ok={test?.postbridge} error={test?.errors?.postbridge} />
-            </Field>
-            <Field label="OpenRouter API key" hint="Runs the AI that writes your slideshows — one key, any model. Get one at openrouter.ai/keys.">
-              <input
-                value={openrouter}
-                onChange={(e) => setOpenrouter(e.target.value)}
-                placeholder="sk-or-..."
-                className={`${inputClass} font-mono`}
-              />
-              <TestBadge ok={test?.openrouter} error={test?.errors?.openrouter} />
-            </Field>
+            <IntegrationStatus label="post-bridge" configured={config.keys.postbridge} test={test?.postbridge} error={test?.errors?.postbridge} />
+            <IntegrationStatus label="OpenRouter" configured={config.keys.openrouter} test={test?.openrouter} error={test?.errors?.openrouter} />
             <Field label="Model" hint={`Pick any model OpenRouter offers${models.length ? ` (${models.length} available)` : ''}.`}>
               <input
                 value={modelFilter}
@@ -190,8 +217,8 @@ export function SettingsView({
           >
             {accounts.length === 0 ? (
               <p className="text-[12px] text-ink-5">
-                No connected accounts yet. Add your post-bridge key above, hit Test, then connect
-                accounts at <PostBridgeLink>post-bridge.com</PostBridgeLink> — they'll appear here.
+                No connected accounts yet. Configure POST_BRIDGE_API_KEY for the Convex deployment,
+                hit Test, then connect accounts at <PostBridgeLink>post-bridge.com</PostBridgeLink> — they'll appear here.
               </p>
             ) : (
               <div className="flex flex-col gap-1.5">
@@ -227,6 +254,19 @@ export function SettingsView({
             description="Which image packs new slideshows pull backgrounds from when you hit Generate. Select none to generate with plain gradients."
           >
             <PackPicker selected={imagePacks} onChange={setImagePacks} />
+            <Button
+              variant="secondary"
+              icon={libraryImport ? <Loader2 size={13} className="animate-spin" /> : <Images size={13} />}
+              onClick={() => void importBundledLibrary()}
+              disabled={libraryImport !== null}
+            >
+              {libraryImport
+                ? `Importing ${libraryImport.done} / ${libraryImport.total}…`
+                : 'Import bundled library to Convex Storage'}
+            </Button>
+            <p className="text-[11px] text-ink-6">
+              Safe to run again: existing pack images are detected by name and the duplicate upload is removed.
+            </p>
           </Section>
 
           <div className="flex items-center gap-3 pt-2">
@@ -284,6 +324,18 @@ function TestBadge({ ok, error }: { ok?: boolean; error?: string }) {
     <p className="text-[11px] text-red-600 mt-1 flex items-center gap-1">
       <X size={11} /> {error || 'Failed'}
     </p>
+  );
+}
+
+function IntegrationStatus({ label, configured, test, error }: { label: string; configured: boolean; test?: boolean; error?: string }) {
+  return (
+    <div className="flex items-center justify-between gap-3 px-3 py-2.5 rounded-lg border border-line bg-card">
+      <span className="text-[13px] font-medium text-ink">{label}</span>
+      <span className={`text-[11px] ${configured ? 'text-emerald-600' : 'text-amber-600'}`}>
+        {configured ? 'Configured' : 'Not configured'}
+      </span>
+      <TestBadge ok={test} error={error} />
+    </div>
   );
 }
 

@@ -1,11 +1,15 @@
 import { useCallback, useEffect, useState } from 'react';
 import { Loader2, FileEdit, CheckCircle2, Clock, RefreshCw } from 'lucide-react';
+import { useAction } from 'convex/react';
+import { api } from '../../convex/_generated/api';
+import type { Id } from '../../convex/_generated/dataModel';
 import type { ScheduledPost } from '../types';
 import { ViewHeader } from '../components/ViewHeader';
-import { getScheduledPosts } from '../lib/api';
+import { mapScheduledPosts } from '../lib/api';
 
 interface ScheduleViewProps {
   configured: boolean;
+  projectId: Id<'projects'>;
 }
 
 function dayKey(p: ScheduledPost) {
@@ -36,7 +40,8 @@ const statusMeta: Record<string, { icon: typeof Clock; className: string; label:
   posted: { icon: CheckCircle2, className: 'text-emerald-600', label: 'Posted' },
 };
 
-export function ScheduleView({ configured }: ScheduleViewProps) {
+export function ScheduleView({ configured, projectId }: ScheduleViewProps) {
+  const listPosts = useAction(api.postbridge.listPosts);
   const [posts, setPosts] = useState<ScheduledPost[] | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [refreshing, setRefreshing] = useState(false);
@@ -46,17 +51,30 @@ export function ScheduleView({ configured }: ScheduleViewProps) {
     setRefreshing(true);
     setError(null);
     try {
-      setPosts(await getScheduledPosts());
+      const raw = await listPosts({ projectId });
+      setPosts(mapScheduledPosts(raw as Array<Record<string, unknown>>));
     } catch (e) {
       setError(e instanceof Error ? e.message : String(e));
     } finally {
       setRefreshing(false);
     }
-  }, [configured]);
+  }, [configured, listPosts, projectId]);
 
   useEffect(() => {
-    void load();
-  }, [load]);
+    let cancelled = false;
+    if (!configured) return;
+    listPosts({ projectId }).then(
+      (raw) => {
+        if (cancelled) return;
+        setPosts(mapScheduledPosts(raw as Array<Record<string, unknown>>));
+        setError(null);
+      },
+      (cause) => {
+        if (!cancelled) setError(cause instanceof Error ? cause.message : String(cause));
+      },
+    );
+    return () => { cancelled = true; };
+  }, [configured, listPosts, projectId]);
 
   const grouped = posts
     ? Object.entries(
