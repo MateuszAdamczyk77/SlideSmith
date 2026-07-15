@@ -18,6 +18,12 @@ dist-ssr
 !.env.example
 .slidesmith/
 
+# Local agent skills installed for this workspace
+.agents/
+.claude/
+agent/
+skills-lock.json
+
 # Editor directories and files
 .vscode/*
 !.vscode/extensions.json
