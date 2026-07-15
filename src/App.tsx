@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { useAuthActions } from '@convex-dev/auth/react';
 import { Authenticated, AuthLoading, Unauthenticated, useAction, useMutation, useQuery } from 'convex/react';
 import { api } from '../convex/_generated/api';
@@ -67,15 +67,6 @@ function SlidesmithApp() {
   const activeProject: Project | undefined = config?.projects.find(
     (project) => project.id === config.activeProjectId,
   ) ?? config?.projects[0];
-
-  const loadAccounts = useCallback(async () => {
-    if (!activeProject || !hasPostbridge) return setAccounts([]);
-    try {
-      setAccounts(mapAccounts(await listAccounts({ projectId: activeProject.id })));
-    } catch {
-      setAccounts([]);
-    }
-  }, [activeProject, hasPostbridge, listAccounts]);
 
   useEffect(() => {
     if (config && config.projects.length === 0) void ensureDefaultProject({});
@@ -173,6 +164,7 @@ function SlidesmithApp() {
         onSelectView={setActiveView}
         queueCount={queue.length}
         scheduledCount={0}
+        postbridgeEnabled={hasPostbridge}
         projects={config.projects}
         activeProjectId={activeProject.id}
         onSwitchProject={(projectId) => void activateProject({ projectId })}
@@ -189,6 +181,7 @@ function SlidesmithApp() {
             slideshows={queue}
             generating={generating}
             canGenerate={hasOpenrouter}
+            canPublish={hasPostbridge}
             onGenerate={() => setGenerateOpen(true)}
             selectedIds={validSelectedIds}
             onApprove={(id) => setScheduling(queue.find((show) => show.id === id) || null)}
@@ -214,19 +207,16 @@ function SlidesmithApp() {
             key={activeProject.id}
             config={config}
             project={activeProject}
-            accounts={accounts}
             canDelete={config.projects.length > 1}
             onSave={async (patch) => {
               if (patch.model !== undefined) await saveModel({ model: patch.model });
               await updateProject({
                 projectId: activeProject.id,
                 ...(patch.name !== undefined ? { name: patch.name } : {}),
-                ...(patch.defaults ? { defaults: patch.defaults } : {}),
                 ...(patch.imagePacks ? { imagePacks: patch.imagePacks } : {}),
               });
             }}
             onDeleteProject={() => void removeProject({ projectId: activeProject.id })}
-            onReloadAccounts={() => void loadAccounts()}
           />
         )}
       </main>

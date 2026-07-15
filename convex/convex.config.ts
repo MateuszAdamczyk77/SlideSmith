@@ -6,6 +6,7 @@ const app = defineApp({
     ALLOWED_USER_EMAIL: v.optional(v.string()),
     OPENROUTER_API_KEY: v.optional(v.string()),
     POST_BRIDGE_API_KEY: v.optional(v.string()),
+    POST_BRIDGE_ENABLED: v.optional(v.string()),
     OPENROUTER_MODEL: v.optional(v.string()),
   },
 });

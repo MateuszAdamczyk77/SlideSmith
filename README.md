@@ -1,16 +1,16 @@
 # Slidesmith
 
-Slidesmith creates on-brand TikTok/Instagram carousel slideshows, renders them in the browser, and publishes them through post-bridge. The frontend remains React + Vite; all backend state, authentication, files, and integrations run in Convex.
+Slidesmith creates on-brand TikTok/Instagram carousel slideshows and renders them in the browser. The frontend remains React + Vite; all backend state, authentication, files, and active integrations run in Convex.
 
 ## Architecture
 
 - **Convex Auth** — password sign-in restricted by `ALLOWED_USER_EMAIL`.
 - **Convex Database** — owner-scoped projects, image packs, images, slideshows, slides, and settings.
 - **Convex File Storage** — library images and temporary rendered PNG files.
-- **Convex Actions** — OpenRouter generation and post-bridge scheduling/analytics. API keys never reach the browser or database.
-- **React + Vite** — existing dashboard, editor, browser-side 1080×1920 rendering, queue, schedule, and results views.
+- **Convex Actions** — OpenRouter generation with secrets kept out of the browser and database.
+- **React + Vite** — existing dashboard, editor, browser-side 1080×1920 rendering, queue, and library views.
 
-Rendered slides are uploaded as binary PNG Blobs. The client passes only Convex `storageId` values to the post-bridge Action; temporary files are deleted after success or failure.
+Post-bridge publishing is currently product-disabled. Its dormant backend module is guarded by `POST_BRIDGE_ENABLED=true`, so it cannot be invoked accidentally. Schedule/Results and publishing controls are hidden while the feature is disabled. A future local video export can replace this flow.
 
 ## Local setup
 
@@ -25,7 +25,6 @@ Configure the deployment. Use the email that should be the only account allowed 
 ```bash
 npx convex env set ALLOWED_USER_EMAIL owner@example.com
 npx convex env set OPENROUTER_API_KEY your_openrouter_key
-npx convex env set POST_BRIDGE_API_KEY your_post_bridge_key
 ```
 
 Then start Convex and Vite together:

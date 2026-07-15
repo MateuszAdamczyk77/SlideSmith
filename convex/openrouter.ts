@@ -2,7 +2,7 @@ import { v } from "convex/values";
 import { internal } from "./_generated/api";
 import type { Id } from "./_generated/dataModel";
 import { action, env } from "./_generated/server";
-import { requireAllowedIdentity } from "./authz";
+import { requireActionOwnerId } from "./authz";
 
 const BASE_URL = "https://openrouter.ai/api/v1";
 const ATTRIBUTION_HEADERS = {
@@ -54,9 +54,26 @@ type ModelSlideshow = {
 };
 
 function openRouterKey(): string {
-  const key = env.OPENROUTER_API_KEY;
+  const key = env.OPENROUTER_API_KEY?.trim();
   if (!key) throw new Error("OPENROUTER_API_KEY is not configured.");
   return key;
+}
+
+function openRouterError(status: number, body: unknown, statusText: string): Error {
+  if (status === 401) {
+    return new Error(
+      "OpenRouter authentication failed. OPENROUTER_API_KEY is invalid or revoked; create a new OpenRouter API key and update the Convex environment variable.",
+    );
+  }
+  if (status === 402) {
+    return new Error("OpenRouter has insufficient credits. Add credits to the account or API key and try again.");
+  }
+
+  const message =
+    body && typeof body === "object" && "error" in body
+      ? JSON.stringify((body as { error: unknown }).error)
+      : statusText;
+  return new Error(`OpenRouter ${status}: ${message}`);
 }
 
 function buildPrompt(brain: Brain, count: number): string {
@@ -116,11 +133,7 @@ async function chatJson(model: string, prompt: string): Promise<Record<string, u
   });
   const body: unknown = await response.json().catch(() => null);
   if (!response.ok) {
-    const message =
-      body && typeof body === "object" && "error" in body
-        ? JSON.stringify((body as { error: unknown }).error)
-        : response.statusText;
-    throw new Error(`OpenRouter ${response.status}: ${message}`);
+    throw openRouterError(response.status, body, response.statusText);
   }
   const content = (body as { choices?: Array<{ message?: { content?: unknown } }> } | null)
     ?.choices?.[0]?.message?.content;
@@ -136,9 +149,9 @@ function cleanModelSlideshow(value: unknown): ModelSlideshow | null {
 export const listModels = action({
   args: { projectId: v.id("projects") },
   handler: async (ctx, args) => {
-    const identity = await requireAllowedIdentity(ctx);
+    const ownerId = await requireActionOwnerId(ctx);
     await ctx.runQuery(internal.access.authorizeProject, {
-      ownerId: identity.tokenIdentifier,
+      ownerId,
       projectId: args.projectId,
     });
     const response = await fetch(`${BASE_URL}/models`);
@@ -157,15 +170,16 @@ export const listModels = action({
 export const test = action({
   args: { projectId: v.id("projects") },
   handler: async (ctx, args) => {
-    const identity = await requireAllowedIdentity(ctx);
+    const ownerId = await requireActionOwnerId(ctx);
     await ctx.runQuery(internal.access.authorizeProject, {
-      ownerId: identity.tokenIdentifier,
+      ownerId,
       projectId: args.projectId,
     });
     const response = await fetch(`${BASE_URL}/key`, {
       headers: { Authorization: `Bearer ${openRouterKey()}` },
     });
-    if (!response.ok) throw new Error(`OpenRouter ${response.status}: invalid key`);
+    const body: unknown = await response.json().catch(() => null);
+    if (!response.ok) throw openRouterError(response.status, body, response.statusText);
     return true;
   },
 });
@@ -178,13 +192,13 @@ export const generate = action({
     imagePackIds: v.optional(v.array(v.id("imagePacks"))),
   },
   handler: async (ctx, args): Promise<unknown> => {
-    const identity = await requireAllowedIdentity(ctx);
+    const ownerId = await requireActionOwnerId(ctx);
     const context: {
       project: { brain: Brain };
       model: string | null;
       images: Array<{ _id: Id<"images">; storageId: Id<"_storage"> }>;
     } = await ctx.runQuery(internal.access.generationContext, {
-      ownerId: identity.tokenIdentifier,
+      ownerId,
       projectId: args.projectId,
       imagePackIds: args.imagePackIds,
     });
@@ -237,7 +251,7 @@ export const generate = action({
     });
 
     return await ctx.runMutation(internal.slideshows.createGeneratedBatch, {
-      ownerId: identity.tokenIdentifier,
+      ownerId,
       projectId: args.projectId,
       slideshows,
     });

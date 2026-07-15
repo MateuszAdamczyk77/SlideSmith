@@ -49,4 +49,11 @@ describe('authentication and ownership', () => {
     const updated = await owner.query(api.config.get, {});
     expect(updated.projects[0].name).toBe('Private project');
   });
+
+  test('returns an empty queue before the first project is created', async () => {
+    const t = convexTest(schema, modules);
+    const owner = t.withIdentity({ email: allowedEmail, tokenIdentifier: 'owner-token' });
+
+    await expect(owner.query(api.slideshows.listQueue, {})).resolves.toEqual([]);
+  });
 });

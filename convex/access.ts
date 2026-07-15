@@ -1,6 +1,17 @@
 import { v } from "convex/values";
-import { internalQuery } from "./_generated/server";
+import { env, internalQuery } from "./_generated/server";
 import { getSettings, requireOwnedImagePack, requireOwnedProject, requireOwnedSlideshow } from "./dataHelpers";
+
+export const authorizeAllowedUser = internalQuery({
+  args: { userId: v.id("users") },
+  handler: async (ctx, args) => {
+    const user = await ctx.db.get("users", args.userId);
+    const email = user?.email?.trim().toLowerCase();
+    const allowedEmail = env.ALLOWED_USER_EMAIL?.trim().toLowerCase();
+    if (!email || !allowedEmail || email !== allowedEmail) throw new Error("Unauthorized");
+    return true;
+  },
+});
 
 export const authorizeProject = internalQuery({
   args: { ownerId: v.string(), projectId: v.id("projects") },

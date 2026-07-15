@@ -85,7 +85,7 @@ export async function getConfigData(ctx: ReadCtx, ownerId: string) {
       : projects[0]?._id ?? null;
   return {
     keys: {
-      postbridge: Boolean(env.POST_BRIDGE_API_KEY),
+      postbridge: env.POST_BRIDGE_ENABLED === "true" && Boolean(env.POST_BRIDGE_API_KEY),
       openrouter: Boolean(env.OPENROUTER_API_KEY),
     },
     model: settings?.model ?? env.OPENROUTER_MODEL ?? "openai/gpt-4o-mini",
@@ -94,13 +94,17 @@ export async function getConfigData(ctx: ReadCtx, ownerId: string) {
   };
 }
 
-export async function getActiveOwnedProject(ctx: ReadCtx, ownerId: string) {
+export async function findActiveOwnedProject(ctx: ReadCtx, ownerId: string) {
   const settings = await getSettings(ctx, ownerId);
   if (settings?.activeProjectId) return await requireOwnedProject(ctx, ownerId, settings.activeProjectId);
-  const project = await ctx.db
+  return await ctx.db
     .query("projects")
     .withIndex("by_ownerId", (q) => q.eq("ownerId", ownerId))
     .first();
+}
+
+export async function getActiveOwnedProject(ctx: ReadCtx, ownerId: string) {
+  const project = await findActiveOwnedProject(ctx, ownerId);
   if (project === null) throw new Error("Create a project first");
   return project;
 }

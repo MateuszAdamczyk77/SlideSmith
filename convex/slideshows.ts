@@ -3,7 +3,7 @@ import { internalMutation, mutation, query } from "./_generated/server";
 import type { MutationCtx, QueryCtx } from "./_generated/server";
 import type { Id } from "./_generated/dataModel";
 import { requireOwnerId } from "./authz";
-import { getActiveOwnedProject, requireOwnedProject, requireOwnedSlideshow } from "./dataHelpers";
+import { findActiveOwnedProject, requireOwnedProject, requireOwnedSlideshow } from "./dataHelpers";
 
 export const slideInputValidator = v.object({
   externalId: v.string(),
@@ -24,7 +24,8 @@ const generatedSlideshowValidator = v.object({
 });
 
 async function queueForOwner(ctx: QueryCtx | MutationCtx, ownerId: string) {
-  const project = await getActiveOwnedProject(ctx, ownerId);
+  const project = await findActiveOwnedProject(ctx, ownerId);
+  if (project === null) return [];
   const shows = await ctx.db
     .query("slideshows")
     .withIndex("by_ownerId_and_projectId_and_status", (q) => q.eq("ownerId", ownerId).eq("projectId", project._id).eq("status", "queue"))

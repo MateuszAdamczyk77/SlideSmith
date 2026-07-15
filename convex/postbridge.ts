@@ -2,7 +2,7 @@ import { v } from "convex/values";
 import { internal } from "./_generated/api";
 import type { Doc } from "./_generated/dataModel";
 import { action, env } from "./_generated/server";
-import { requireAllowedIdentity } from "./authz";
+import { requireActionOwnerId } from "./authz";
 
 const BASE_URL = "https://api.post-bridge.com";
 const MIN_GAP_MS = 350;
@@ -14,6 +14,9 @@ const sleep = (milliseconds: number) =>
   new Promise<void>((resolve) => setTimeout(resolve, milliseconds));
 
 function apiKey(): string {
+  if (env.POST_BRIDGE_ENABLED !== "true") {
+    throw new Error("post-bridge support is currently disabled.");
+  }
   const key = env.POST_BRIDGE_API_KEY;
   if (!key) throw new Error("POST_BRIDGE_API_KEY is not configured.");
   return key;
@@ -137,9 +140,9 @@ async function uploadMedia(blob: Blob, name: string): Promise<string> {
 export const test = action({
   args: { projectId: v.id("projects") },
   handler: async (ctx, args) => {
-    const identity = await requireAllowedIdentity(ctx);
+    const ownerId = await requireActionOwnerId(ctx);
     await ctx.runQuery(internal.access.authorizeProject, {
-      ownerId: identity.tokenIdentifier,
+      ownerId,
       projectId: args.projectId,
     });
     await listAccountsImpl();
@@ -150,9 +153,9 @@ export const test = action({
 export const listAccounts = action({
   args: { projectId: v.id("projects") },
   handler: async (ctx, args) => {
-    const identity = await requireAllowedIdentity(ctx);
+    const ownerId = await requireActionOwnerId(ctx);
     await ctx.runQuery(internal.access.authorizeProject, {
-      ownerId: identity.tokenIdentifier,
+      ownerId,
       projectId: args.projectId,
     });
     return await listAccountsImpl();
@@ -162,9 +165,9 @@ export const listAccounts = action({
 export const listPosts = action({
   args: { projectId: v.id("projects") },
   handler: async (ctx, args) => {
-    const identity = await requireAllowedIdentity(ctx);
+    const ownerId = await requireActionOwnerId(ctx);
     await ctx.runQuery(internal.access.authorizeProject, {
-      ownerId: identity.tokenIdentifier,
+      ownerId,
       projectId: args.projectId,
     });
     return await listPostsImpl();
@@ -174,9 +177,9 @@ export const listPosts = action({
 export const listAnalytics = action({
   args: { projectId: v.id("projects") },
   handler: async (ctx, args) => {
-    const identity = await requireAllowedIdentity(ctx);
+    const ownerId = await requireActionOwnerId(ctx);
     await ctx.runQuery(internal.access.authorizeProject, {
-      ownerId: identity.tokenIdentifier,
+      ownerId,
       projectId: args.projectId,
     });
     return await listAnalyticsImpl();
@@ -186,9 +189,9 @@ export const listAnalytics = action({
 export const syncAnalytics = action({
   args: { projectId: v.id("projects") },
   handler: async (ctx, args) => {
-    const identity = await requireAllowedIdentity(ctx);
+    const ownerId = await requireActionOwnerId(ctx);
     await ctx.runQuery(internal.access.authorizeProject, {
-      ownerId: identity.tokenIdentifier,
+      ownerId,
       projectId: args.projectId,
     });
     try {
@@ -212,8 +215,7 @@ export const schedule = action({
     mode: v.union(v.literal("draft"), v.literal("schedule")),
   },
   handler: async (ctx, args) => {
-    const identity = await requireAllowedIdentity(ctx);
-    const ownerId = identity.tokenIdentifier;
+    const ownerId = await requireActionOwnerId(ctx);
     await ctx.runQuery(internal.access.authorizeProject, {
       ownerId,
       projectId: args.projectId,

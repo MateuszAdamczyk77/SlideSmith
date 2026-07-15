@@ -10,6 +10,7 @@ interface QueueViewProps {
   slideshows: Slideshow[];
   generating: boolean;
   canGenerate: boolean;
+  canPublish: boolean;
   selectedIds: Id<'slideshows'>[];
   onGenerate: () => void;
   onApprove: (id: Id<'slideshows'>) => void;
@@ -25,6 +26,7 @@ export function QueueView({
   slideshows,
   generating,
   canGenerate,
+  canPublish,
   selectedIds,
   onGenerate,
   onApprove,
@@ -40,10 +42,10 @@ export function QueueView({
     <>
       <ViewHeader
         title="Queue"
-        subtitle={`${slideshows.length} slideshows waiting for your review. Approve to send to the scheduler.`}
+        subtitle={`${slideshows.length} slideshows waiting for your review.${canPublish ? ' Approve to send to the scheduler.' : ''}`}
         right={
           <>
-            {selectedCount > 0 ? (
+            {canPublish && selectedCount > 0 ? (
               <>
                 <span className="text-[12px] text-ink-5">{selectedCount} selected</span>
                 <Button variant="primary" icon={<Check size={13} />} onClick={onBulkSchedule}>
@@ -52,7 +54,7 @@ export function QueueView({
                 <Button variant="ghost" onClick={onClearSelection}>Clear</Button>
               </>
             ) : (
-              slideshows.length > 0 && (
+              canPublish && slideshows.length > 0 && (
                 <Button variant="secondary" onClick={onSelectAll}>Select all</Button>
               )
             )}
@@ -104,6 +106,7 @@ export function QueueView({
                 key={s.id}
                 slideshow={s}
                 selected={selectedIds.includes(s.id)}
+                canPublish={canPublish}
                 onToggleSelect={() => onToggleSelect(s.id)}
                 onApprove={() => onApprove(s.id)}
                 onReject={() => onReject(s.id)}
@@ -120,20 +123,23 @@ export function QueueView({
 interface CardProps {
   slideshow: Slideshow;
   selected: boolean;
+  canPublish: boolean;
   onToggleSelect: () => void;
   onApprove: () => void;
   onReject: () => void;
   onEdit: () => void;
 }
 
-function SlideshowCard({ slideshow, selected, onToggleSelect, onApprove, onReject, onEdit }: CardProps) {
+function SlideshowCard({ slideshow, selected, canPublish, onToggleSelect, onApprove, onReject, onEdit }: CardProps) {
   return (
     <div className={`bg-card border rounded-xl overflow-hidden animate-fadeIn transition-colors ${selected ? 'border-ink ring-1 ring-ink' : 'border-line'}`}>
       {/* Slide strip */}
       <div className="relative p-4 bg-surface border-b border-line">
-        <label className="absolute top-2 left-2 z-10 w-6 h-6 rounded-md bg-card/90 border border-line flex items-center justify-center cursor-pointer shadow-sm">
-          <input type="checkbox" checked={selected} onChange={onToggleSelect} className="cursor-pointer" />
-        </label>
+        {canPublish && (
+          <label className="absolute top-2 left-2 z-10 w-6 h-6 rounded-md bg-card/90 border border-line flex items-center justify-center cursor-pointer shadow-sm">
+            <input type="checkbox" checked={selected} onChange={onToggleSelect} className="cursor-pointer" />
+          </label>
+        )}
         <div className="grid grid-cols-6 gap-1.5">
           {slideshow.slides.map((slide) => (
             <SlidePreview key={slide.id} slide={slide} />
@@ -170,14 +176,16 @@ function SlideshowCard({ slideshow, selected, onToggleSelect, onApprove, onRejec
           <Button variant="secondary" icon={<Pencil size={13} />} onClick={onEdit}>
             Edit
           </Button>
-          <Button
-            variant="primary"
-            icon={<Check size={13} />}
-            onClick={onApprove}
-            fullWidth
-          >
-            Approve
-          </Button>
+          {canPublish && (
+            <Button
+              variant="primary"
+              icon={<Check size={13} />}
+              onClick={onApprove}
+              fullWidth
+            >
+              Approve
+            </Button>
+          )}
           <IconButton
             variant="secondary"
             icon={<X size={13} />}

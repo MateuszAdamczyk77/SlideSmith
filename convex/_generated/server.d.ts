@@ -29,6 +29,7 @@ type Env = {
   readonly OPENROUTER_API_KEY: string | undefined;
   readonly OPENROUTER_MODEL: string | undefined;
   readonly POST_BRIDGE_API_KEY: string | undefined;
+  readonly POST_BRIDGE_ENABLED: string | undefined;
 };
 
 /**

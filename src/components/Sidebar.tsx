@@ -8,6 +8,7 @@ interface SidebarProps {
   onSelectView: (view: ViewKey) => void;
   queueCount: number;
   scheduledCount: number;
+  postbridgeEnabled: boolean;
   projects: Project[];
   activeProjectId: Id<'projects'>;
   onSwitchProject: (id: Id<'projects'>) => void;
@@ -32,6 +33,7 @@ export function Sidebar({
   onSelectView,
   queueCount,
   scheduledCount,
+  postbridgeEnabled,
   projects,
   activeProjectId,
   onSwitchProject,
@@ -106,7 +108,7 @@ export function Sidebar({
       {/* Nav */}
       <div className="flex-1 overflow-y-auto py-3 px-2">
         <div className="flex flex-col gap-0.5">
-          {nav.map(({ key, label, icon: Icon, badge }) => {
+          {nav.filter(({ key }) => postbridgeEnabled || (key !== 'schedule' && key !== 'results')).map(({ key, label, icon: Icon, badge }) => {
             const isActive = activeView === key;
             const count = badge === 'queue' ? queueCount : badge === 'scheduled' ? scheduledCount : undefined;
             return (
