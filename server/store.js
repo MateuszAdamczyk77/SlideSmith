@@ -56,6 +56,11 @@ function makeProject(name, brain, defaults, imagePacks) {
 // ({ brain, defaults } at top level) into projects[].
 export function getConfig() {
   const s = readJson(CONFIG_PATH, {})
+  const savedKeys = s.keys || {}
+  const supportedKeyNames = ['postbridge', 'openrouter']
+  const hasUnsupportedConfig =
+    Object.keys(savedKeys).some((key) => !supportedKeyNames.includes(key)) ||
+    Object.keys(s).some((key) => !['keys', 'model', 'projects', 'activeProjectId'].includes(key))
   let projects = Array.isArray(s.projects) && s.projects.length
     ? s.projects.map((p) => ({
         id: p.id || newId('p'),
@@ -77,9 +82,11 @@ export function getConfig() {
     : projects[0].id
 
   const cfg = {
-    keys: { postbridge: '', openrouter: '', apify: '', ...s.keys },
+    keys: {
+      postbridge: typeof savedKeys.postbridge === 'string' ? savedKeys.postbridge : '',
+      openrouter: typeof savedKeys.openrouter === 'string' ? savedKeys.openrouter : '',
+    },
     model: s.model || 'openai/gpt-4o-mini',
-    pinterestActor: s.pinterestActor || 'fatihtahta/pinterest-scraper-search',
     projects,
     activeProjectId,
   }
@@ -91,7 +98,8 @@ export function getConfig() {
     !Array.isArray(s.projects) ||
     s.projects.length !== projects.length ||
     s.activeProjectId !== activeProjectId ||
-    s.projects.some((p, i) => p.id !== projects[i].id)
+    s.projects.some((p, i) => p.id !== projects[i].id) ||
+    hasUnsupportedConfig
   if (needsPersist) writeJson(CONFIG_PATH, cfg)
 
   return cfg
@@ -108,8 +116,10 @@ export function saveGlobal(patch) {
   return writeConfig({
     ...c,
     model: patch.model ?? c.model,
-    pinterestActor: patch.pinterestActor ?? c.pinterestActor,
-    keys: { ...c.keys, ...patch.keys },
+    keys: {
+      postbridge: patch.keys?.postbridge ?? c.keys.postbridge,
+      openrouter: patch.keys?.openrouter ?? c.keys.openrouter,
+    },
   })
 }
 

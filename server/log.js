@@ -1,5 +1,5 @@
 // Prettified server logging so `npm run dev` shows what's happening during the
-// slow flows (scraping Pinterest, generating with the model, uploading +
+// slow flows (generating with the model, uploading +
 // scheduling to post-bridge). Colorized, timestamped, with a tiny spinner-free
 // progress helper. No deps — just ANSI codes, disabled when not a TTY or when
 // NO_COLOR is set.
@@ -20,7 +20,6 @@ const c = {
 
 // A short, fixed-width colored tag per flow so logs are scannable at a glance.
 const TAGS = {
-  scrape: c.magenta('scrape '),
   generate: c.cyan('generate'),
   schedule: c.green('schedule'),
   server: c.blue('server  '),

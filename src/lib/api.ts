@@ -26,8 +26,8 @@ async function req<T>(path: string, init?: RequestInit): Promise<T> {
 
 export const getConfig = () => req<AppConfig>('/config');
 
-// Global settings only (keys + model + scraper actor).
-export const saveConfig = (patch: { keys?: AppConfig['keys']; model?: string; pinterestActor?: string }) =>
+// Global settings only (keys + model).
+export const saveConfig = (patch: { keys?: AppConfig['keys']; model?: string }) =>
   req<AppConfig>('/config', { method: 'PUT', body: JSON.stringify(patch) });
 
 // Projects — each has its own Brain + default post-bridge accounts.
@@ -46,7 +46,7 @@ export const activateProject = (id: string) =>
   req<AppConfig>(`/projects/${id}/activate`, { method: 'POST' });
 
 export const testKeys = () =>
-  req<{ postbridge: boolean; openrouter: boolean; apify: boolean; errors: Record<string, string> }>(
+  req<{ postbridge: boolean; openrouter: boolean; errors: Record<string, string> }>(
     '/config/test',
     { method: 'POST' }
   );
@@ -70,15 +70,6 @@ export const updateSlideshow = (
 export const getLibrary = () => req<LibraryImage[]>('/library');
 
 export const getPacks = () => req<LibraryPack[]>('/library/packs');
-
-export const scrapePinterest = (searches: string[], count: number) =>
-  req<{ added: number; found: number }>('/library/scrape', {
-    method: 'POST',
-    body: JSON.stringify({ searches, count }),
-  });
-
-export const deleteLibraryImage = (id: string) =>
-  req<LibraryImage[]>(`/library/${encodeURIComponent(id)}`, { method: 'DELETE' });
 
 export const getAccounts = () => req<SocialAccount[]>('/accounts');
 

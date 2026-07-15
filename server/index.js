@@ -22,7 +22,7 @@ import {
 import { listAccounts, listPosts, listAnalytics, syncAnalytics, uploadMedia, createPost } from './postbridge.js'
 import { generateSlideshows } from './generate.js'
 import { listModels, validateKey } from './openrouter.js'
-import { listLibrary, listPacks, scrapePinterest, removeScraped, getScrapedFile } from './library.js'
+import { listLibrary, listPacks } from './library.js'
 import { logger } from './log.js'
 
 const __dirname = dirname(fileURLToPath(import.meta.url))
@@ -67,7 +67,7 @@ app.post('/api/projects/:id/activate', h(async (req, res) => res.json(setActiveP
 // Validate that the saved keys actually work, so Settings can show a green check.
 app.post('/api/config/test', h(async (_req, res) => {
   const { keys } = getConfig()
-  const result = { postbridge: false, openrouter: false, apify: false, errors: {} }
+  const result = { postbridge: false, openrouter: false, errors: {} }
   if (keys.postbridge) {
     try { await listAccounts(keys.postbridge); result.postbridge = true }
     catch (e) { result.errors.postbridge = e.message }
@@ -75,13 +75,6 @@ app.post('/api/config/test', h(async (_req, res) => {
   if (keys.openrouter) {
     try { await validateKey(keys.openrouter); result.openrouter = true }
     catch (e) { result.errors.openrouter = e.message }
-  }
-  if (keys.apify) {
-    try {
-      const r = await fetch(`https://api.apify.com/v2/users/me?token=${keys.apify}`)
-      if (!r.ok) throw new Error(`invalid key (${r.status})`)
-      result.apify = true
-    } catch (e) { result.errors.apify = e.message }
   }
   res.json(result)
 }))
@@ -142,25 +135,9 @@ app.put('/api/queue/:id', h(async (req, res) => {
   res.json(setQueue(pid, next))
 }))
 
-// ── Image library (bundled aesthetic packs + Pinterest scrapes via Apify) ────────
+// ── Image library ───────────────────────────────────────────────────────────
 app.get('/api/library', h(async (_req, res) => res.json(listLibrary())))
 app.get('/api/library/packs', h(async (_req, res) => res.json(listPacks())))
-
-app.post('/api/library/scrape', h(async (req, res) => {
-  const { keys, pinterestActor } = getConfig()
-  const { searches, count } = req.body || {}
-  res.json(await scrapePinterest({ apiKey: keys.apify, actor: pinterestActor, searches, count }))
-}))
-
-app.delete('/api/library/:id', h(async (req, res) => res.json(removeScraped(req.params.id))))
-
-app.get('/api/library/img/:id', h(async (req, res) => {
-  const file = getScrapedFile(req.params.id)
-  if (!file) return res.status(404).end()
-  // dotfiles:'allow' is required — the path lives under ~/.slidesmith, and
-  // sendFile blocks dot-segment paths by default (would 404 every scrape).
-  res.sendFile(file, { dotfiles: 'allow' })
-}))
 
 // ── post-bridge ───────────────────────────────────────────────────────────────
 app.get('/api/accounts', h(async (_req, res) => {

@@ -42,9 +42,8 @@ export interface Project {
 }
 
 export interface AppConfig {
-  keys: { postbridge: string; openrouter: string; apify: string };
+  keys: { postbridge: string; openrouter: string };
   model: string;
-  pinterestActor: string;
   projects: Project[];
   activeProjectId: string;
 }
@@ -53,12 +52,12 @@ export interface LibraryImage {
   id: string;
   url: string;
   pack: string;
-  source: 'bundled' | 'scraped';
+  source: 'bundled';
 }
 
 export interface LibraryPack {
   name: string;
-  source: 'bundled' | 'scraped';
+  source: 'bundled';
   count: number;
   covers: string[];
 }

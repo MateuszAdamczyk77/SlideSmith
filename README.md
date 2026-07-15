@@ -26,7 +26,7 @@ You ──▶ Brain (niche, audience, style)
 
 - **Generation** is done by an AI model via **OpenRouter** (your OpenRouter key) — pick any model from the dropdown.
 - **Slide images** are rendered locally in your browser (text over a gradient *or* a background image from the Library) — no image-gen API, no cost.
-- **Backgrounds** come from a bundled **image library** of curated aesthetic packs. Want more? Scrape Pinterest with your own **Apify** key (optional).
+- **Backgrounds** come from a bundled **image library** of curated aesthetic packs.
 - **Scheduling, posting, and analytics** are handled by **post-bridge** (your post-bridge key). That also means **no posting integrations to build and no storage to host.**
 
 ## What you need
@@ -37,7 +37,6 @@ Two API keys, entered in the in-app **Settings** screen:
 | --- | --- | --- |
 | **OpenRouter** | Runs the AI that writes the slideshows (any model) | [openrouter.ai/keys](https://openrouter.ai/keys) |
 | **post-bridge** | Scheduling, posting & analytics | [post-bridge.com](https://post-bridge.com?atp=clip-factory) |
-| **Apify** *(optional)* | Scrape extra Pinterest images into the Library | [console.apify.com](https://console.apify.com) |
 
 Connect your social accounts inside post-bridge — they'll show up in Slidesmith automatically.
 
@@ -69,19 +68,18 @@ npm start       # serves the UI + API from one Node process (port 8787)
 2. **Brain** — tell the AI who this project is: niche, app/brand, audience, and style memory. This shapes every generation.
 3. **Background packs** (Settings) — pick which image packs this project draws from. *Generate* then auto-applies a background to every slide. Select none for plain gradients.
 4. **Queue** — hit *Generate* and the AI writes a batch of slideshows, already wearing backgrounds. Hit **Edit** on any card to preview the carousel and tweak the caption, hashtags, per-slide text, and per-slide background.
-5. **Library** — browse the bundled aesthetic packs, or scrape more images from any Pinterest search with your Apify key.
+5. **Library** — browse the bundled aesthetic packs.
 6. **Approve** — pick which connected accounts to post to and either schedule a time or save as a draft in post-bridge. Slidesmith renders each slide to an image and hands it to post-bridge.
 7. **Schedule / Results** — track what's queued and how published posts are performing, straight from post-bridge.
 
 ### A note on the bundled images
 
-Slidesmith ships with ~140 curated background images organized into aesthetic packs (`public/library/`). They were collected from the web to get you started and may be subject to third-party copyright — they are not licensed stock. Swap in your own via the Library (scrape Pinterest with your own Apify key) if you need images you have the rights to.
+Slidesmith ships with ~140 curated background images organized into aesthetic packs (`public/library/`). They were collected from the web to get you started and may be subject to third-party copyright — they are not licensed stock.
 
 ## Where your data lives
 
 - **API keys + Brain + settings:** `~/.slidesmith/config.json`
 - **Generated-but-not-yet-scheduled drafts:** `~/.slidesmith/queue.json`
-- **Scraped library images:** `~/.slidesmith/library/` (bundled packs live in the repo at `public/library/`)
 - **Everything else** (media, scheduled posts, results) lives in your post-bridge account.
 
 Your keys never leave your machine except to reach the services they belong to (OpenRouter, post-bridge). The browser never sees them — they stay on the local server.

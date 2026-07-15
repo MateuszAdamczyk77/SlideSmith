@@ -14,7 +14,6 @@ interface SettingsViewProps {
   onSave: (patch: {
     keys?: AppConfig['keys'];
     model?: string;
-    pinterestActor?: string;
     name?: string;
     defaults?: Project['defaults'];
     imagePacks?: string[];
@@ -47,8 +46,6 @@ export function SettingsView({
 }: SettingsViewProps) {
   const [postbridge, setPostbridge] = useState(config.keys.postbridge);
   const [openrouter, setOpenrouter] = useState(config.keys.openrouter);
-  const [apify, setApify] = useState(config.keys.apify);
-  const [pinterestActor, setPinterestActor] = useState(config.pinterestActor);
   const [model, setModel] = useState(config.model);
   const [name, setName] = useState(project.name);
   const [mode, setMode] = useState(project.defaults.mode);
@@ -60,7 +57,7 @@ export function SettingsView({
   const [testing, setTesting] = useState(false);
   const [saved, setSaved] = useState(false);
   const [saveError, setSaveError] = useState<string | null>(null);
-  const [test, setTest] = useState<{ postbridge: boolean; openrouter: boolean; apify: boolean; errors: Record<string, string> } | null>(null);
+  const [test, setTest] = useState<{ postbridge: boolean; openrouter: boolean; errors: Record<string, string> } | null>(null);
 
   // Re-sync editable fields when the active project changes (switching projects).
   useEffect(() => {
@@ -80,9 +77,8 @@ export function SettingsView({
     setSaveError(null);
     try {
       await onSave({
-        keys: { postbridge, openrouter, apify },
+        keys: { postbridge, openrouter },
         model,
-        pinterestActor,
         name,
         defaults: { socialAccountIds: selected, mode },
         imagePacks,
@@ -168,23 +164,6 @@ export function SettingsView({
                 className={`${inputClass} font-mono`}
               />
               <TestBadge ok={test?.openrouter} error={test?.errors?.openrouter} />
-            </Field>
-            <Field label="Apify API key (optional)" hint="Only needed to scrape MORE Pinterest images. The bundled aesthetic packs work without it. Get one at console.apify.com.">
-              <input
-                value={apify}
-                onChange={(e) => setApify(e.target.value)}
-                placeholder="apify_api_..."
-                className={`${inputClass} font-mono`}
-              />
-              <TestBadge ok={test?.apify} error={test?.errors?.apify} />
-            </Field>
-            <Field label="Pinterest Apify actor" hint="The Apify actor used for scraping. Change only if you prefer a different one.">
-              <input
-                value={pinterestActor}
-                onChange={(e) => setPinterestActor(e.target.value)}
-                placeholder="fatihtahta/pinterest-scraper-search"
-                className={`${inputClass} font-mono`}
-              />
             </Field>
             <Field label="Model" hint={`Pick any model OpenRouter offers${models.length ? ` (${models.length} available)` : ''}.`}>
               <input

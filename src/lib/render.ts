@@ -60,7 +60,7 @@ export async function renderSlide(slide: Slide): Promise<string> {
   const ctx = canvas.getContext('2d')!;
 
   if (slide.imageUrl) {
-    // Image background (same-origin: bundled at /library/… or scraped via /api/…).
+    // Image background from a bundled, same-origin library asset.
     try {
       const img = await loadImage(slide.imageUrl);
       drawCover(ctx, img);
